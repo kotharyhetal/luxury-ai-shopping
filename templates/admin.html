@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Luxury Shopping{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1><i class="fas fa-cog"></i> Admin Panel</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Quick Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <a href="#products-section" class="text-decoration-none">
+                                <div class="text-center">
+                                    <h3 class="text-primary">{{ products|length }}</h3>
+                                    <p>Total Products</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="#orders-section" class="text-decoration-none">
+                                <div class="text-center">
+                                    <h3 class="text-success">{{ orders|length }}</h3>
+                                    <p>Total Orders</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="#orders-section" class="text-decoration-none">
+                                <div class="text-center">
+                                    <h3 class="text-info">{{ orders|selectattr('status', 'equalto', 'pending')|list|length }}</h3>
+                                    <p>Pending Orders</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="#orders-section" class="text-decoration-none">
+                                <div class="text-center">
+                                    <h3 class="text-warning">${{ "%.2f"|format(orders|sum(attribute='total_amount')) }}</h3>
+                                    <p>Total Revenue</p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Settings Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>AI Advisor Settings</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="form-group row align-items-center mb-3">
+                            <label for="ai_provider" class="col-sm-2 col-form-label">AI Provider</label>
+                            <div class="col-sm-10">
+                                {{ form.ai_provider(class="form-select") }}
+                            </div>
+                        </div>
+
+                        <div class="form-group row align-items-center mb-3">
+                            <label for="openai_api_key" class="col-sm-2 col-form-label">OpenAI API Key</label>
+                            <div class="col-sm-10">
+                                {{ form.openai_api_key(class="form-control", placeholder="sk-...") }}
+                            </div>
+                        </div>
+
+                        <div class="form-group row align-items-center mb-3">
+                            <label for="gemini_api_key" class="col-sm-2 col-form-label">Gemini API Key</label>
+                            <div class="col-sm-10">
+                                {{ form.gemini_api_key(class="form-control", placeholder="AIza...") }}
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-sm-10 offset-sm-2">
+                                {{ form.submit(class="btn btn-primary") }}
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card" id="products-section">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Products</h5>
+                    <a href="{{ url_for('inventory') }}" class="btn btn-info btn-sm">
+                        <i class="fas fa-boxes"></i> Inventory Management
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Category</th>
+                                    <th>Price</th>
+                                    <th>Stock</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in products %}
+                                <tr>
+                                    <td>{{ product.name }}</td>
+                                    <td>{{ product.category }}</td>
+                                    <td>${{ "%.2f"|format(product.price) }}</td>
+                                    <td>{{ product.stock }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card" id="orders-section">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Recent Orders</h5>
+                    <a href="{{ url_for('admin_orders') }}" class="btn btn-info btn-sm">
+                        <i class="fas fa-list"></i> Orders Management
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Customer</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in orders[:10] %}
+                                <tr>
+                                    <td>#{{ order.id }}</td>
+                                    <td>{{ order.user.username }}</td>
+                                    <td>${{ "%.2f"|format(order.total_amount) }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if order.status == 'completed' else 'warning' if order.status == 'pending' else 'info' }}">
+                                            {{ order.status.title() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

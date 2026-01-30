@@ -1,0 +1,56 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: luxuryshoppingacr
+  ACR_REPOSITORY: luxury-shopping
+  ACR_LOGIN_SERVER: luxuryshoppingacr.azurecr.io
+  AZURE_RESOURCE_GROUP: LuxuryShoppingStudent
+  AZURE_WEBAPP_NAME: luxuryshoppingwebsite
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: |
+          TOKEN=$(az acr login --name "${{ env.ACR_NAME }}" --expose-token --output tsv --query accessToken)
+          echo "$TOKEN" | docker login "${{ env.ACR_LOGIN_SERVER }}" --username 00000000-0000-0000-0000-000000000000 --password-stdin
+
+      - name: Build and push image to ACR
+        run: |
+          docker build -t "${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_REPOSITORY }}:latest" .
+          docker push "${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_REPOSITORY }}:latest"
+
+      - name: Point Web App to latest image and restart
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -euo pipefail
+            az account show
+            az webapp show --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" --name "${{ env.AZURE_WEBAPP_NAME }}" --query "{name:name,resourceGroup:resourceGroup,defaultHostName:defaultHostName}" -o json
+            az webapp config container set \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
+              --docker-custom-image-name "${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_REPOSITORY }}:latest" \
+              --docker-registry-server-url "https://${{ env.ACR_LOGIN_SERVER }}"
+
+            az webapp restart \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ env.AZURE_WEBAPP_NAME }}"
