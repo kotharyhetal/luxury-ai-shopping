@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 from sqlalchemy.orm import joinedload
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, FloatField, TextAreaField, IntegerField
@@ -259,7 +260,11 @@ def get_products():
 
 @app.route('/health')
 def health():
-    return 'OK', 200
+    try:
+        db.session.execute(text('SELECT 1'))
+        return 'OK', 200
+    except Exception as e:
+        return f'DB_ERROR: {e}', 500
 
 @app.route('/')
 def index():
