@@ -19,19 +19,60 @@ load_dotenv()
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
-use_local_db = os.environ.get('USE_LOCAL_DB', 'false').lower() == 'true'
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
-if use_local_db:
+if not database_url:
     database_url = f'sqlite:///{os.path.join(os.getcwd(), "instance", "luxury.db")}'
-else:
-    database_url = 'mssql+pyodbc://luxuryadmin:LuxuryPass2024!@luxuryshopping-sql.database.windows.net:1433/luxurydb?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no'
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'luxury_shopping_secret_key_2024'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'luxury_shopping_secret_key_2024')
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+def _init_db_and_seed():
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception as e:
+            if 'conversation_log.user_id' in str(e):
+                ConversationLog.__table__.drop(db.engine, checkfirst=True)
+                ConversationLog.__table__.create(db.engine)
+            else:
+                raise e
+
+        admin_user = User.query.filter_by(username='admin').first()
+        if not admin_user:
+            admin_user = User(username='admin', email='admin@luxury.com', is_admin=True)
+            admin_user.set_password('admin123')
+            db.session.add(admin_user)
+
+            sample_products = [
+                Product(name='Luxury Watch', description='Premium Swiss-made timepiece with gold plating', price=2500.00, category='Watches', image_url='https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400'),
+                Product(name='Designer Handbag', description='Italian leather handbag with premium hardware', price=1800.00, category='Bags', image_url='https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400'),
+                Product(name='Silk Scarf', description='100% pure silk scarf with exclusive designer print', price=350.00, category='Accessories', image_url='https://uk.silksilky.com/cdn/shop/files/1603004566_7c8e1b0d-c9e9-482a-9497-54e0a16fbd8c.jpg?v=1762889111&width=550'),
+                Product(name='Leather Jacket', description='Genuine brown leather jacket with classic cut', price=1200.00, category='Clothing', image_url='https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80'),
+                Product(name='Diamond Ring', description='18k gold ring with brilliant cut diamond', price=5500.00, category='Jewelry', image_url='https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400'),
+                Product(name='Premium Sunglasses', description='Designer sunglasses with UV protection', price=450.00, category='Accessories', image_url='https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=400')
+            ]
+
+            for product in sample_products:
+                db.session.add(product)
+
+            db.session.commit()
+
+        silk_scarf = Product.query.filter_by(name='Silk Scarf').first()
+        if silk_scarf and silk_scarf.image_url != 'https://uk.silksilky.com/cdn/shop/files/1603004566_7c8e1b0d-c9e9-482a-9497-54e0a16fbd8c.jpg?v=1762889111&width=550':
+            silk_scarf.image_url = 'https://uk.silksilky.com/cdn/shop/files/1603004566_7c8e1b0d-c9e9-482a-9497-54e0a16fbd8c.jpg?v=1762889111&width=550'
+            db.session.commit()
+
+        leather_jacket = Product.query.filter_by(name='Leather Jacket').first()
+        if leather_jacket and leather_jacket.image_url != 'https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80':
+            leather_jacket.image_url = 'https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80'
+            db.session.commit()
 
 @app.context_processor
 def inject_user():
@@ -204,6 +245,10 @@ def get_products():
         'page': page,
         'total': pagination.total
     })
+
+@app.route('/health')
+def health():
+    return 'OK', 200
 
 @app.route('/')
 def index():
@@ -863,50 +908,8 @@ def get_conversation_history():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    with app.app_context():
-        try:
-            db.create_all()
-        except Exception as e:
-            # Handle migration issues for ConversationLog table
-            if 'conversation_log.user_id' in str(e):
-                print("Migration issue detected. Recreating conversation_log table...")
-                # Drop and recreate the conversation log table
-                ConversationLog.__table__.drop(db.engine, checkfirst=True)
-                ConversationLog.__table__.create(db.engine)
-                print("Conversation logs table recreated successfully.")
-            else:
-                raise e
-        
-        admin_user = User.query.filter_by(username='admin').first()
-        if not admin_user:
-            admin_user = User(username='admin', email='admin@luxury.com', is_admin=True)
-            admin_user.set_password('admin123')
-            db.session.add(admin_user)
-            
-            sample_products = [
-                Product(name='Luxury Watch', description='Premium Swiss-made timepiece with gold plating', price=2500.00, category='Watches', image_url='https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400'),
-                Product(name='Designer Handbag', description='Italian leather handbag with premium hardware', price=1800.00, category='Bags', image_url='https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400'),
-                Product(name='Silk Scarf', description='100% pure silk scarf with exclusive designer print', price=350.00, category='Accessories', image_url='https://uk.silksilky.com/cdn/shop/files/1603004566_7c8e1b0d-c9e9-482a-9497-54e0a16fbd8c.jpg?v=1762889111&width=550'),
-                Product(name='Leather Jacket', description='Genuine brown leather jacket with classic cut', price=1200.00, category='Clothing', image_url='https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80'),
-                Product(name='Diamond Ring', description='18k gold ring with brilliant cut diamond', price=5500.00, category='Jewelry', image_url='https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400'),
-                Product(name='Premium Sunglasses', description='Designer sunglasses with UV protection', price=450.00, category='Accessories', image_url='https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=400')
-            ]
-            
-            for product in sample_products:
-                db.session.add(product)
-            
-            db.session.commit()
-
-        silk_scarf = Product.query.filter_by(name='Silk Scarf').first()
-        if silk_scarf and silk_scarf.image_url != 'https://uk.silksilky.com/cdn/shop/files/1603004566_7c8e1b0d-c9e9-482a-9497-54e0a16fbd8c.jpg?v=1762889111&width=550':
-            silk_scarf.image_url = 'https://uk.silksilky.com/cdn/shop/files/1603004566_7c8e1b0d-c9e9-482a-9497-54e0a16fbd8c.jpg?v=1762889111&width=550'
-            db.session.commit()
-
-        leather_jacket = Product.query.filter_by(name='Leather Jacket').first()
-        if leather_jacket and leather_jacket.image_url != 'https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80':
-            leather_jacket.image_url = 'https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80'
-            db.session.commit()
+if os.environ.get('SKIP_DB_INIT', 'false').lower() != 'true':
+    _init_db_and_seed()
 
 @app.route('/admin/orders')
 def admin_orders():
