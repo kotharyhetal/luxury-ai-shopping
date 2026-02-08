@@ -20,6 +20,14 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 database_url = os.environ.get('DATABASE_URL')
+if isinstance(database_url, str):
+    database_url = database_url.strip()
+    if (database_url.startswith('"') and database_url.endswith('"')) or (
+        database_url.startswith("'") and database_url.endswith("'")
+    ):
+        database_url = database_url[1:-1].strip()
+if not database_url:
+    database_url = None
 if database_url and database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
